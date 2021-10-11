@@ -1,0 +1,68 @@
+---
+title: "NYC Resturant Inspections"
+author: "David Jackson"
+date: "10/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(janitor)
+library(readxl)
+library(tidytext)
+```
+
+## R Data Cleaning
+
+```{r}
+resturants <- read_excel("./nyc_restaurantsXLS.xlsx")
+resturants <- janitor::clean_names(resturants)
+resturants <- na.omit(resturants)
+resturants$inspection_date <- lubridate::mdy(resturants$inspection_date)
+resturants1 <- resturants %>% filter(inspection_date >="2014-01-01",critical_flag =="Critical" )
+```
+
+## Discriptive Stats: Date Range Jan. 2014 - Dec. 2019
+
+```{r}
+resturants %>% filter(inspection_date >="2014-01-01") %>% count(inspection_date,sort =TRUE) %>% 
+  ggplot(aes(x=inspection_date,y=n))+ geom_line() +
+  geom_smooth(aes(x=inspection_date,y=n),method = "glm")
+  labs(title = "Count of Inspections by Date")
+
+```
+
+```{r}
+resturants$score <-as.numeric(resturants$score)
+resturants %>% ggplot(aes(x=score)) + geom_histogram(binwidth = 20) + labs(title = "Histogram of Inspection Scores")
+```
+```{r}
+resturants %>% count(grade,sort =TRUE) %>%
+  ggplot(aes(x=reorder(grade,n),y=n)) + geom_col() +
+  labs(title = "Count by Grades")
+```
+```{r}
+ggplot(resturants) + geom_line(aes(x=grade,y=score))
+```
+
+```{r}
+resturants1 %>% count(boro,sort =TRUE)  %>%
+  ggplot(aes(x=reorder(boro,n),n)) + geom_col() +
+  labs(title = "Count of Violations by Boro")
+```
+
+```{r}
+resturants1 %>% count(violation_code,sort = TRUE) %>%
+  top_n(25) %>%
+  ggplot(aes(x=reorder(violation_code,n),y=n)) + geom_col() +
+  coord_flip() + labs(title = "Top 25: by Violation Code")
+```
+```{r}
+resturants1 %>% count(cuisine_description,sort = TRUE) %>%
+  top_n(25) %>%
+  ggplot(aes(x=reorder(cuisine_description,n),y=n)) + geom_col() +
+  coord_flip() + labs(title = "Top 25 Count by Cuisine")
+
+```
+
