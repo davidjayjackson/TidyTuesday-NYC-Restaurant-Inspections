@@ -131,12 +131,11 @@ tidy_stop %>%
 ```{r}
 data("stop_words")
 text_tokins <- text_df %>%
-  unnest_tokens(ngram, text,token = "ngrams",n=2) %>%
+  unnest_tokens(ngram, text,token = "ngrams",n=4) %>%
   rename(word = ngram)
 
 ```
 ```{r}
-
 
 tidy_stop <- text_tokins %>%
 anti_join(stop_words)
@@ -144,6 +143,7 @@ anti_join(stop_words)
  tidy_stop %>%
   count(word, sort = TRUE) 
 ```
+
 ## Plot of word freq for ngram =2
 
 
@@ -192,25 +192,76 @@ tidy_books %>%
   count(word, sort = TRUE) %>% top_n(25) %>%
   ggplot(aes(x=reorder(word,n),y=n)) + geom_point() + coord_flip()
 ```
+```{r}
+text_df <- resturants1 %>% select(text)
+text_df$line <- row_number(text_df)
+
+text_tokins <- text_df %>%
+  unnest_tokens(word, text)
+
+```
+
+```{r}
+data(stop_words)
+tidy_stop <- text_tokins %>%
+  anti_join(stop_words)
+```
+
+```{r}
+tidy_stop %>%
+  count(word, sort = TRUE) 
+```
 
 #### Lexicon: Bing
 
 ```{r}
 bing <- get_sentiments("bing")
-tidy_bing < - tidy_stop %>% inner_join(bing)
+
+tidy_bing <- tidy_stop %>% inner_join(bing)
+
+tidy_bing %>% count(sentiment,sort = TRUE) %>%
+  ggplot(aes(x=sentiment,y=n)) + geom_col()
+
 ```
+```{r}
+tidy_bing %>% count(word,sentiment,sort = TRUE) %>% top_n(20) %>%
+  ggplot(aes(x=reorder(word,n),y=n,fill = sentiment)) + geom_col() +
+  facet_wrap( ~sentiment,ncol=1) + coord_flip()
+
+  
+```
+
 
 #### Lexicon  NRC
 
 ```{r}
 nrc <- get_sentiments("nrc")
 tidy_nrc <- tidy_stop %>% inner_join(nrc)
+tidy_nrc %>% count(sentiment,sort = TRUE) %>%
+  ggplot(aes(x=reorder(sentiment,n),y=n)) + geom_col() +
+  coord_flip()
 ```
+
+
 
 ### Lexicon: AFINN
 
 ```{r}
 afinn <- get_sentiments("afinn")
 tidy_afinn <- tidy_stop %>% inner_join(afinn)
+tidy_afinn %>% count(value,sort = TRUE) %>%
+  ggplot(aes(x=reorder(value,n),y=n)) + geom_col()
+``` 
+
+### Word Cloud
+
+```{r}
+library(wordcloud)
+tidy_stop %>%
+    count(word) %>%
+  with(wordcloud(word, n, max.words = 100))
+
 ```
+
+
 
