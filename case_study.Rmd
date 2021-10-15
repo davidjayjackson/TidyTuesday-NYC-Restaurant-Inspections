@@ -1,0 +1,191 @@
+---
+title: 'Case Study: NYC Resturants Inspection'
+author: "David Jackson"
+date: "10/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,error=FALSE,message = FALSE)
+library(tidyverse)
+library(scales)
+library(janitor)
+library(readxl)
+library(tidytext)
+library(janeaustenr)
+library(stringr)
+library(wordcloud)
+```
+
+## Analysis of Resturants with "Critical" Violations
+
+#### Opening Notes:
+
+ * Grades: Grade associated with the inspection; • N = Not Yet Graded• A = Grade A• B = Grade B• C = Grade C• Z = Grade Pending• P= Grade Pending issued on re-opening following an initial inspection that resulted in a closure
+ 
+ Since 2010, New York City has required restaurants to post letter grades that correspond to scores received from sanitary inspections. An inspection score of 0 to 13 is an A, 14 to 27 points is a B, and 28 or more points is a C. Grade cards must be posted where they can easily be seen by people passing by.
+ 
+* score of less than 14 points on either initial or re-inspection results in an “A” grade
+* On re-inspection, a score of 14-27 points means a restaurant receives both a “B” grade and a “Grade Pending” card
+* On re-inspection, a score of 28 or more points means a restaurant receives both a “C” grade and a “Grade Pending” card
+
+Source: 
+* https://www1.nyc.gov/site/doh/business/food-operators/letter-grading-for-restaurants.page
+
+* Data : https://data.cityofnewyork.us/Health/DOHMH-New-York-City-Restaurant-Inspection-Results/43nn-pn8j
+
+#### Data Wrangling 
+
+```{r}
+rm(list=ls())
+resturants <- read_excel("./nyc_restaurantsXLS.xlsx")
+resturants <- janitor::clean_names(resturants)
+resturants <- na.omit(resturants)
+resturants$inspection_date <- lubridate::mdy(resturants$inspection_date)
+resturants$score <-as.numeric(resturants$score)
+resturants <- resturants %>% rename( text = violation_description)
+
+resturants <- resturants %>% filter(inspection_date >="2014-01-01")
+resturants1 <- resturants %>% filter(critical_flag =="Critical" )
+
+```
+
+## Discriptive Stats: Date Range Jan. 2014 - Dec. 2019
+
+```{r}
+resturants %>% count(inspection_date,sort =TRUE) %>% 
+  ggplot(aes(x=inspection_date,y=n))+ geom_line() +
+  geom_smooth(aes(x=inspection_date,y=n),method = "glm") +
+  labs(title = "Count of Inspections by Date") 
+ 
+```
+```{r}
+resturants$score <-as.numeric(resturants$score)
+resturants %>% ggplot(aes(x=score)) + geom_histogram(binwidth = 20) + labs(title = "Histogram of Inspection Scores")
+```
+
+```{r}
+resturants %>% count(grade,sort =TRUE) %>%
+  ggplot(aes(x=reorder(grade,n),y=n)) + geom_col() +
+  labs(title = "Count by Grades")
+```
+
+## Inspections were after Jan. 2014 and Flagged as Critical
+
+```{r}
+resturants1 %>% count(boro,sort =TRUE)  %>%
+  ggplot(aes(x=reorder(boro,n),n)) + geom_col() +
+  labs(title = "Count of Violations by Boro",x="NYC Boros",y="Count of Violations")
+```
+
+## Top Twenty Five (25) Violations by Code
+
+```{r}
+resturants1 %>% count(violation_code,sort = TRUE) %>%
+  top_n(25) %>%
+  ggplot(aes(x=reorder(violation_code,n),y=n)) + geom_col() +
+  coord_flip() + 
+  labs(title = "Top 25: by Violation Code",x="Count of Violations",
+       y="Violation Code")
+```
+
+```{r}
+resturants1$cuisine_description <- gsub("	
+Latin (Cuban- Dominican- Puerto Rican- South & Central American)","Latin",resturants1$cuisine_description)
+```
+```{r}
+  
+resturants1 %>% count(cuisine_description,sort = TRUE) %>%
+  top_n(25) %>%
+  ggplot(aes(x=reorder(cuisine_description,n),y=n)) + geom_col() +
+  coord_flip() + labs(title = "Top 25 Count by Cuisine")
+
+```
+
+## Begin Text Analysis with tidytext
+
+```{r}
+text_df <- resturants1 %>% select(text)
+text_df$line <- row_number(text_df)
+
+text_tokins <- text_df %>%
+  unnest_tokens(word, text)
+
+```
+```{r}
+data(stop_words)
+tidy_stop <- text_tokins %>%
+  anti_join(stop_words)
+```
+
+```{r}
+tidy_stop %>%
+  count(word, sort = TRUE) 
+```
+
+## First Visualizations
+
+```{r}
+tidy_stop %>%
+  count(word, sort = TRUE) %>%
+  top_n(25) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word)) +
+  geom_point() +
+  labs(y = NULL)
+```
+
+## Key words (without food/flies)
+
+```{r}
+tidy_stop %>%
+  count(word, sort = TRUE) %>% filter(!word %in% c("food","flies"))%>%
+  top_n(25) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word)) +
+  geom_point() +
+  labs(y = NULL)
+```
+
+## Let's get down and dirty with Lexicons
+
+```{r}
+get_sentiments("bing") %>% count(sentiment,sort =T) %>%
+  ggplot(aes(x=reorder(sentiment,n),y=n)) + geom_col() +
+  coord_flip()
+```
+```{r}
+get_sentiments("nrc") %>% count(sentiment,sort =T) %>%
+  ggplot(aes(x=reorder(sentiment,n),y=n)) + geom_col() +
+  coord_flip()
+```
+
+#### Lexicon: Bing
+
+```{r}
+bing <- get_sentiments("bing")
+
+tidy_bing <- tidy_stop %>% inner_join(bing)
+
+tidy_bing %>% count(sentiment,sort = TRUE) %>%
+  ggplot(aes(x=sentiment,y=n)) + geom_col()
+
+```
+```{r}
+tidy_bing %>% count(word,sentiment,sort = TRUE) %>% top_n(20) %>%
+  ggplot(aes(x=reorder(word,n),y=n,fill = sentiment)) + geom_col() +
+  facet_wrap( ~sentiment,ncol=1) + coord_flip()
+
+  
+```
+
+### Word Cloud
+
+```{r}
+library(wordcloud)
+tidy_stop %>%
+    count(word) %>%
+  with(wordcloud(word, n, max.words = 100))
+
+```
+
